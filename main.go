@@ -15,8 +15,7 @@ func main() {
 	askForInput()
 
 	if projectRoot != "" && gitEndpoint != "" {
-		cmd := exec.Command("git", "clone", gitEndpoint, projectRoot)
-		cmd.Run();
+		cloneGitRepo();
 	}
 
 	if whichWebServer == "2" {
@@ -38,6 +37,33 @@ func askForInput() {
 
 	fmt.Print("4) Which web server? (Apache - 1, Nginx - 2, key in 1 or 2) ? : ")
 	fmt.Scanln(&whichWebServer)
+
+	fmt.Print("5) PHP version currently use? (Put only first two major number, eg: 7.4, 8.0, 7.2, 5.6) ? : ")
+	fmt.Scanln(&phpVersion)
+}
+
+func cloneGitRepo() {
+	cmdCloneRepo := exec.Command("git", "clone", gitEndpoint, projectRoot)
+	cmdCloneRepo.Run()
+
+	// Change ownership of storage folder
+	cmdChangeUser := exec.Command("chown", "www-data:www-data", "-R", projectRoot + "/storage")
+	cmdChangeUser.Run()
+
+	// Copy .env.example file
+	cmdCopyEnv := exec.Command("cp", projectRoot + "/.env.example", projectRoot + "/.env")
+	cmdCopyEnv.Run();
+
+	// Change directory easier to run any command related to project
+	os.Chdir(projectRoot);
+
+	// Run composer install
+	cmdComposer := exec.Command("composer", "install");
+	cmdComposer.Run();
+
+	// Run php generate key
+	cmdPhpKey := exec.Command("php", "artisan", "key:generate");
+	cmdPhpKey.Run();
 }
 
 func createNginxVhost() {
@@ -62,7 +88,8 @@ func createNginxVhost() {
 	// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
 	cmdGetFpmPath, err := exec.Command(
 		"cat",
-		"/etc/php/$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp '7.\\d+')/fpm/pool.d/www.conf",
+		//"/etc/php/$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp '7.\\d+')/fpm/pool.d/www.conf",
+		"/etc/php/" + phpVersion + "/fpm/pool.d/www.conf",
 		"|",
 		"grep",
 		"'listen ='",
@@ -75,7 +102,7 @@ func createNginxVhost() {
 	cmdLn.Run()
 
 	// Restart nginx web server once done
-	cmdRestartWebServer := exec.Command("service", "nginx", "restart")
+	cmdRestartWebServer := exec.Command("service", "nginx", "reload")
 	cmdRestartWebServer.Run();
 }
 
