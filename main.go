@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 )
@@ -15,6 +17,12 @@ func main() {
 	if projectRoot != "" && gitEndpoint != "" {
 		cmd := exec.Command("git", "clone", gitEndpoint, projectRoot)
 		cmd.Run();
+	}
+
+	if whichWebServer == "2" {
+		createNginxVhost();
+	} else {
+		createApacheVhost();
 	}
 }
 
@@ -40,11 +48,39 @@ func createNginxVhost() {
 	if err != nil {
 		return
 	}
-	var domainPath = "/etc/nginx/site-available/" + domain + ".conf"
-
-	cmd := exec.Command("ln", "-s", domainPath, "/etc/nginx/sites-enabled/")
+	// Get/download the file from source
+	cmd := exec.Command("wget", "https://raw.githubusercontent.com/metallurgical/server-host-automation/master/default-nginx-host.conf", "-P", "/tmp");
+	// Copy the file from source into nginx sites-available folder
+	var vhostFileName = domain + ".conf"
+	var domainPath = "/etc/nginx/site-available/" + vhostFileName
+	cmd = exec.Command("cp", "/tmp/" + vhostFileName, domainPath)
 	cmd.Run()
 
+	// Replace document root full path into new project directory path
+	replaceContent(domainPath, "$documentRoot", projectRoot + "/public");
+	// Replace matching server name with new the exact domain name
+	replaceContent(domainPath, "$serverName", domain);
+	// Replace php fpm socket path
+	replaceContent(domainPath, "$phpFpmSocket", "unix:/var/run/php/php " + phpVersion + "-fpm.sock");
+
+	// Once successfully created into sites-available, create symlink to that file
 	cmd = exec.Command("ln", "-s", domainPath, "/etc/nginx/sites-enabled/")
 	cmd.Run()
+}
+
+func createApacheVhost() {
+
+}
+
+func replaceContent(source string, search string, replace string) {
+	input, err := ioutil.ReadFile(source)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	output := bytes.Replace(input, []byte(search), []byte(replace), -1)
+	if err = ioutil.WriteFile(source, output, 0666); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
