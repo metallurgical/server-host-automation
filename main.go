@@ -67,8 +67,9 @@ func cloneGitRepo() {
 	}
 
 	// Change ownership of storage folder
-	fmt.Println(">>>> Change owner storage folder of " + projectRoot + "/storage as www-data user")
-	cmdChangeUser := exec.Command("chown", "www-data:www-data", "-R", projectRoot+"/storage")
+	fmt.Println(">>>> Change owner storage folder of " + projectRoot + "/storage as www-data/apache user")
+	webServerUser,_ := getWebServerUser();
+	cmdChangeUser := exec.Command("chown", webServerUser + ":" + webServerUser, "-R", projectRoot+"/storage")
 	cmdChangeUser.Run()
 	fmt.Println(">>>> Done change ownership of storage folder")
 
@@ -133,7 +134,7 @@ func createNginxVhost() {
 		// Get the full path of php-fpm socket. This will return the output
 		// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
 		//cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
-		version, _ := getPhpVersion();
+		version, _ := getPhpVersion()
 		cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+version+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
 		if err != nil {
 			return
@@ -258,4 +259,20 @@ func getPhpVersion() (string, error) {
 		return "", err
 	}
 	return string(cmdPhpVersion)[4:7], nil
+}
+
+// getWebServerUser retrieve web server's user that running as
+// not using `ps aux` since its returning a lot of text
+func getWebServerUser() (string, error) {
+	var webServer string
+	if whichWebServer == "2" {
+		webServer = "nginx"
+	} else {
+		webServer = "httpd|apache2|apache"
+	}
+	cmdUser, err := exec.Command("bash", "-c", "ps -ef | egrep '("+webServer+")' | grep -v `whoami` | grep -v root | head -n1 | awk '{print $1}'").Output()
+	if err != nil {
+		return "", err
+	}
+	return string(cmdUser), nil
 }
