@@ -10,20 +10,32 @@ import (
 	"strings"
 )
 
-var domain, projectRoot, gitEndpoint, whichWebServer, phpVersion string
+const NginxSitesAvailablePath = "/etc/nginx/sites-available"
+const ApacheSitesAvailablePath = "/etc/nginx/sites-available"
+
+var (
+	domain         string
+	projectRoot    string
+	gitEndpoint    string
+	whichWebServer string
+	phpVersion     string
+)
 
 func main() {
-	fmt.Println("[ Server host automation tool by @metallurgical(https://github.com/metallurgical)]")
+	fmt.Println("[Server host automation tool by @metallurgical(https://github.com/metallurgical)]")
 	askForInput()
 
 	if projectRoot != "" && gitEndpoint != "" {
 		cloneGitRepo()
 	}
 
-	if whichWebServer == "2" {
+	switch whichWebServer {
+	case "2":
 		createNginxVhost()
-	} else {
+		break
+	case "1":
 		createApacheVhost()
+		break
 	}
 }
 
@@ -90,11 +102,12 @@ func cloneGitRepo() {
 	fmt.Println(">>>> Done generating APP_KEY")
 }
 
+// createNginxVhost will create a minimal server block for apache
+// to run the desire domain for laravel project.
 func createNginxVhost() {
-	sitesAvailableFolder := "/etc/nginx/sites-available"
-	fmt.Println(">>>> Check if " + sitesAvailableFolder + " folder is exist..")
-	if _, err := os.Stat(sitesAvailableFolder); err != nil {
-		fmt.Println(">>>> Folder " + sitesAvailableFolder + " does not exist!. Abort")
+	fmt.Println(">>>> Check if " + NginxSitesAvailablePath + " folder is exist..")
+	if _, err := os.Stat(NginxSitesAvailablePath); err != nil {
+		fmt.Println(">>>> Folder " + NginxSitesAvailablePath + " does not exist!. Abort")
 		os.Exit(1)
 		return
 	}
@@ -106,7 +119,7 @@ func createNginxVhost() {
 
 	// Move the file from source into nginx sites-available folder
 	var vhostFileName = domain + ".conf"
-	var domainPath = "/etc/nginx/sites-available/" + vhostFileName
+	var domainPath = NginxSitesAvailablePath + "/" + vhostFileName
 	if isExist, _ := exists(domainPath); isExist == true {
 		fmt.Println(">>>> Server block already exist. Skip")
 	} else {
@@ -119,7 +132,9 @@ func createNginxVhost() {
 		replaceContent(domainPath, "[serverName]", domain)
 		// Get the full path of php-fpm socket. This will return the output
 		// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
-		cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
+		//cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
+		version, _ := getPhpVersion();
+		cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+version+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
 		if err != nil {
 			return
 		}
@@ -140,10 +155,52 @@ func createNginxVhost() {
 	}
 }
 
+// createApacheVhost will create a minimal server block for apache
+// to run the desire domain for laravel project.
 func createApacheVhost() {
+	fmt.Println(">>>> Check if " + ApacheSitesAvailablePath + " folder is exist..")
+	if _, err := os.Stat(ApacheSitesAvailablePath); err != nil {
+		fmt.Println(">>>> Folder " + ApacheSitesAvailablePath + " does not exist!. Abort")
+		os.Exit(1)
+		return
+	}
 
+	fmt.Println(">>>> Create apache server block for domain: " + domain + ".")
+	// Get/download the file from source
+	cmdWget := exec.Command("wget", "https://raw.githubusercontent.com/metallurgical/server-host-automation/master/default-apache-host.conf", "-P", "/tmp")
+	cmdWget.Run()
+
+	// Move the file from source into apache2 sites-available folder
+	var vhostFileName = domain + ".conf"
+	var domainPath = ApacheSitesAvailablePath + "/" + vhostFileName
+	if isExist, _ := exists(domainPath); isExist == true {
+		fmt.Println(">>>> Server block already exist. Skip")
+	} else {
+		cmdCp := exec.Command("mv", "/tmp/default-apache-host.conf", domainPath)
+		cmdCp.Run()
+
+		// Replace document root full path into new project directory path
+		replaceContent(domainPath, "[documentRoot]", projectRoot+"/public")
+		// Replace matching server name with new the exact domain name
+		replaceContent(domainPath, "[serverName]", domain)
+
+		fmt.Println(">>>> Done creating server block")
+		// Once successfully created into sites-available, create symlink to that file
+		fmt.Println(">>>> Create symlink server block for domain: " + domain)
+		cmdLn := exec.Command("ln", "-s", domainPath, "/etc/apache2/sites-enabled/")
+		cmdLn.Run()
+		// Enable newly created site
+		enSite := exec.Command("a2ensite", vhostFileName)
+		enSite.Run()
+		// Restart apache web server once done
+		fmt.Println(">>>> Reloading web server to take effect of new changes")
+		cmdRestartWebServer := exec.Command("service", "apache2", "restart")
+		cmdRestartWebServer.Run()
+		fmt.Println(">>>> Project are available to browse with new domain: " + domain)
+	}
 }
 
+// replaceContent search for string and replace with the new one.
 func replaceContent(source string, search string, replace string) {
 	input, err := ioutil.ReadFile(source)
 	if err != nil {
@@ -191,4 +248,14 @@ func exists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// getPhpVersion retrieve automatically php version and extract only
+// first 2 major version
+func getPhpVersion() (string, error) {
+	cmdPhpVersion, err := exec.Command("php", "-v").Output()
+	if err != nil {
+		return "", err
+	}
+	return string(cmdPhpVersion)[4:7], nil
 }
