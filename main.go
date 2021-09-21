@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 var domain, projectRoot, gitEndpoint, whichWebServer, phpVersion string
@@ -15,13 +17,13 @@ func main() {
 	askForInput()
 
 	if projectRoot != "" && gitEndpoint != "" {
-		cloneGitRepo();
+		cloneGitRepo()
 	}
 
 	if whichWebServer == "2" {
-		createNginxVhost();
+		createNginxVhost()
 	} else {
-		createApacheVhost();
+		createApacheVhost()
 	}
 }
 
@@ -45,57 +47,61 @@ func askForInput() {
 func cloneGitRepo() {
 	cmdCloneRepo := exec.Command("git", "clone", gitEndpoint, projectRoot)
 	cmdCloneRepo.Run()
+	//executeCommand("git clone " + gitEndpoint + " " + projectRoot);
 
 	// Change ownership of storage folder
-	cmdChangeUser := exec.Command("chown", "www-data:www-data", "-R", projectRoot + "/storage")
+	cmdChangeUser := exec.Command("chown", "www-data:www-data", "-R", projectRoot+"/storage")
 	cmdChangeUser.Run()
 
 	// Copy .env.example file
-	cmdCopyEnv := exec.Command("cp", projectRoot + "/.env.example", projectRoot + "/.env")
-	cmdCopyEnv.Run();
+	cmdCopyEnv := exec.Command("cp", projectRoot+"/.env.example", projectRoot+"/.env")
+	cmdCopyEnv.Run()
 
 	// Change directory easier to run any command related to project
-	os.Chdir(projectRoot);
+	os.Chdir(projectRoot)
 
 	// Run composer install
-	cmdComposer := exec.Command("composer", "install");
-	cmdComposer.Run();
+	cmdComposer := exec.Command("composer", "install")
+	cmdComposer.Run()
 
 	// Run php generate key
-	cmdPhpKey := exec.Command("php", "artisan", "key:generate");
-	cmdPhpKey.Run();
+	cmdPhpKey := exec.Command("php", "artisan", "key:generate")
+	cmdPhpKey.Run()
 }
 
 func createNginxVhost() {
-	_, err := os.Stat("/etc/nginx/sites-available")
-	if err != nil {
+	if _, err := os.Stat("/etc/nginx/sites-available"); err != nil {
 		return
 	}
 	// Get/download the file from source
-	cmdWget := exec.Command("wget", "https://raw.githubusercontent.com/metallurgical/server-host-automation/master/default-nginx-host.conf", "-P", "/tmp");
-	cmdWget.Run();
+	cmdWget := exec.Command("wget", "https://raw.githubusercontent.com/metallurgical/server-host-automation/master/default-nginx-host.conf", "-P", "/tmp")
+	cmdWget.Run()
 	// Copy the file from source into nginx sites-available folder
 	var vhostFileName = domain + ".conf"
 	var domainPath = "/etc/nginx/site-available/" + vhostFileName
-	cmdCp := exec.Command("cp", "/tmp/" + vhostFileName, domainPath)
-	cmdCp.Run();
+	cmdCp := exec.Command("cp", "/tmp/"+vhostFileName, domainPath)
+	cmdCp.Run()
 
 	// Replace document root full path into new project directory path
-	replaceContent(domainPath, "[documentRoot]", projectRoot + "/public");
+	replaceContent(domainPath, "[documentRoot]", projectRoot+"/public")
 	// Replace matching server name with new the exact domain name
-	replaceContent(domainPath, "[serverName]", domain);
+	replaceContent(domainPath, "[serverName]", domain)
 	// Get the full path of php-fpm socket. This will return the output
 	// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
 	cmdGetFpmPath, err := exec.Command(
 		"cat",
 		//"/etc/php/$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp '7.\\d+')/fpm/pool.d/www.conf",
-		"/etc/php/" + phpVersion + "/fpm/pool.d/www.conf",
+		"/etc/php/"+phpVersion+"/fpm/pool.d/www.conf",
 		"|",
 		"grep",
 		"'listen ='",
-		).Output()
+	).Output()
+	if err != nil {
+		return
+	}
+
 	// Replace php fpm socket path
-	replaceContent(domainPath, "[phpFpmSocket]", "unix:/var/" + string(cmdGetFpmPath)[9:]);
+	replaceContent(domainPath, "[phpFpmSocket]", "unix:/var/"+string(cmdGetFpmPath)[9:])
 
 	// Once successfully created into sites-available, create symlink to that file
 	cmdLn := exec.Command("ln", "-s", domainPath, "/etc/nginx/sites-enabled/")
@@ -103,7 +109,7 @@ func createNginxVhost() {
 
 	// Restart nginx web server once done
 	cmdRestartWebServer := exec.Command("service", "nginx", "reload")
-	cmdRestartWebServer.Run();
+	cmdRestartWebServer.Run()
 }
 
 func createApacheVhost() {
@@ -121,4 +127,27 @@ func replaceContent(source string, search string, replace string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func executeCommand(command string) {
+	cmdArgs := strings.Fields(command)
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:len(cmdArgs)]...)
+	stdout, _ := cmd.StdoutPipe()
+	cmd.Start()
+	oneByte := make([]byte, 100)
+	num := 1
+	for {
+		if _, err := stdout.Read(oneByte); err != nil {
+			fmt.Printf(err.Error())
+			break
+		}
+		r := bufio.NewReader(stdout)
+		line, _, _ := r.ReadLine()
+		fmt.Println(string(line))
+		num = num + 1
+		if num > 3 {
+			os.Exit(0)
+		}
+	}
+	cmd.Wait()
 }
