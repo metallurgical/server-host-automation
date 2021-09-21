@@ -45,41 +45,56 @@ func askForInput() {
 }
 
 func cloneGitRepo() {
+	fmt.Println(">>>> Cloning git repository into " +  projectRoot + " : Running....")
 	cmdCloneRepo := exec.Command("git", "clone", gitEndpoint, projectRoot)
 	cmdCloneRepo.Run()
+	fmt.Println(">>>> Done clone git repository")
 	//executeCommand("git clone " + gitEndpoint + " " + projectRoot);
 
 	// Change ownership of storage folder
+	fmt.Println(">>>> Change owner storage folder of" +  projectRoot + "/storage as www-data user: Running....")
 	cmdChangeUser := exec.Command("chown", "www-data:www-data", "-R", projectRoot+"/storage")
 	cmdChangeUser.Run()
+	fmt.Println(">>>> Done change ownership of storage folder")
 
 	// Copy .env.example file
+	fmt.Println(">>>> Copy .env.example's content into .env file")
 	cmdCopyEnv := exec.Command("cp", projectRoot+"/.env.example", projectRoot+"/.env")
 	cmdCopyEnv.Run()
+	fmt.Println(">>>> Done copied")
 
 	// Change directory easier to run any command related to project
 	os.Chdir(projectRoot)
 
 	// Run composer install
+	fmt.Println(">>>> Running composer install, this might take a while. Running....")
 	cmdComposer := exec.Command("composer", "install")
 	cmdComposer.Run()
+	fmt.Println(">>>> Done install composer dependencies")
 
 	// Run php generate key
+	fmt.Println(">>>> Generate new APP_KEY")
 	cmdPhpKey := exec.Command("php", "artisan", "key:generate")
 	cmdPhpKey.Run()
+	fmt.Println(">>>> Done generating APP_KEY")
 }
 
 func createNginxVhost() {
-	if _, err := os.Stat("/etc/nginx/sites-available"); err != nil {
+	sitesAvailableFolder := "/etc/nginx/sites-available"
+	fmt.Println(">>>> Check if " + sitesAvailableFolder + " folder is exist..")
+	if _, err := os.Stat(sitesAvailableFolder); err != nil {
+		fmt.Println(">>>> Folder " + sitesAvailableFolder + " does not exist!. Abort")
+		os.Exit(1)
 		return
 	}
+	fmt.Println(">>>> Create nginx server block for domain: " + domain + ". Running....")
 	// Get/download the file from source
 	cmdWget := exec.Command("wget", "https://raw.githubusercontent.com/metallurgical/server-host-automation/master/default-nginx-host.conf", "-P", "/tmp")
 	cmdWget.Run()
-	// Copy the file from source into nginx sites-available folder
+	// Move the file from source into nginx sites-available folder
 	var vhostFileName = domain + ".conf"
-	var domainPath = "/etc/nginx/site-available/" + vhostFileName
-	cmdCp := exec.Command("cp", "/tmp/"+vhostFileName, domainPath)
+	var domainPath = "/etc/nginx/sites-available/" + vhostFileName
+	cmdCp := exec.Command("mv", "/tmp/default-nginx-host.conf", domainPath)
 	cmdCp.Run()
 
 	// Replace document root full path into new project directory path
@@ -102,14 +117,18 @@ func createNginxVhost() {
 
 	// Replace php fpm socket path
 	replaceContent(domainPath, "[phpFpmSocket]", "unix:/var/"+string(cmdGetFpmPath)[9:])
+	fmt.Println(">>>> Done creating server block")
 
 	// Once successfully created into sites-available, create symlink to that file
+	fmt.Println(">>>> Create symlink server block for domain: " + domain)
 	cmdLn := exec.Command("ln", "-s", domainPath, "/etc/nginx/sites-enabled/")
 	cmdLn.Run()
 
 	// Restart nginx web server once done
+	fmt.Println(">>>> Reloading web server to take effect of new changes")
 	cmdRestartWebServer := exec.Command("service", "nginx", "reload")
 	cmdRestartWebServer.Run()
+	fmt.Println(">>>> Project are available to browse with new domain: " + domain)
 }
 
 func createApacheVhost() {
