@@ -45,32 +45,43 @@ func askForInput() {
 }
 
 func cloneGitRepo() {
-	fmt.Println(">>>> Cloning git repository into " +  projectRoot + " : Running....")
-	cmdCloneRepo := exec.Command("git", "clone", gitEndpoint, projectRoot)
-	cmdCloneRepo.Run()
-	fmt.Println(">>>> Done clone git repository")
-	//executeCommand("git clone " + gitEndpoint + " " + projectRoot);
+	fmt.Println(">>>> Cloning git repository into " + projectRoot)
+	if isExist, _ := exists(projectRoot); isExist == true {
+		fmt.Println(">>>> Project directory path already exist. Skip")
+	} else {
+		cmdCloneRepo := exec.Command("git", "clone", gitEndpoint, projectRoot)
+		cmdCloneRepo.Run()
+		fmt.Println(">>>> Done clone git repository")
+	}
 
 	// Change ownership of storage folder
-	fmt.Println(">>>> Change owner storage folder of" +  projectRoot + "/storage as www-data user: Running....")
+	fmt.Println(">>>> Change owner storage folder of " + projectRoot + "/storage as www-data user")
 	cmdChangeUser := exec.Command("chown", "www-data:www-data", "-R", projectRoot+"/storage")
 	cmdChangeUser.Run()
 	fmt.Println(">>>> Done change ownership of storage folder")
 
 	// Copy .env.example file
 	fmt.Println(">>>> Copy .env.example's content into .env file")
-	cmdCopyEnv := exec.Command("cp", projectRoot+"/.env.example", projectRoot+"/.env")
-	cmdCopyEnv.Run()
-	fmt.Println(">>>> Done copied")
+	if isExist, _ := exists(projectRoot + "/.env"); isExist == true {
+		fmt.Println(">>>> Env file already exists. Skip")
+	} else {
+		cmdCopyEnv := exec.Command("cp", projectRoot+"/.env.example", projectRoot+"/.env")
+		cmdCopyEnv.Run()
+		fmt.Println(">>>> Done copied")
+	}
 
 	// Change directory easier to run any command related to project
 	os.Chdir(projectRoot)
 
 	// Run composer install
-	fmt.Println(">>>> Running composer install, this might take a while. Running....")
-	cmdComposer := exec.Command("composer", "install")
-	cmdComposer.Run()
-	fmt.Println(">>>> Done install composer dependencies")
+	fmt.Println(">>>> Running composer install, this might take a while.")
+	if isExist, _ := exists(projectRoot + "/vendor"); isExist == true {
+		fmt.Println(">>>> Vendor folder already exist. Skip.")
+	} else {
+		cmdComposer := exec.Command("composer", "install")
+		cmdComposer.Run()
+		fmt.Println(">>>> Done install composer dependencies")
+	}
 
 	// Run php generate key
 	fmt.Println(">>>> Generate new APP_KEY")
@@ -87,48 +98,53 @@ func createNginxVhost() {
 		os.Exit(1)
 		return
 	}
-	fmt.Println(">>>> Create nginx server block for domain: " + domain + ". Running....")
+
+	fmt.Println(">>>> Create nginx server block for domain: " + domain + ".")
 	// Get/download the file from source
 	cmdWget := exec.Command("wget", "https://raw.githubusercontent.com/metallurgical/server-host-automation/master/default-nginx-host.conf", "-P", "/tmp")
 	cmdWget.Run()
+
 	// Move the file from source into nginx sites-available folder
 	var vhostFileName = domain + ".conf"
 	var domainPath = "/etc/nginx/sites-available/" + vhostFileName
-	cmdCp := exec.Command("mv", "/tmp/default-nginx-host.conf", domainPath)
-	cmdCp.Run()
+	if isExist, _ := exists(domainPath); isExist == true {
+		fmt.Println(">>>> Server block already exist. Skip")
+	} else {
+		cmdCp := exec.Command("mv", "/tmp/default-nginx-host.conf", domainPath)
+		cmdCp.Run()
 
-	// Replace document root full path into new project directory path
-	replaceContent(domainPath, "[documentRoot]", projectRoot+"/public")
-	// Replace matching server name with new the exact domain name
-	replaceContent(domainPath, "[serverName]", domain)
-	// Get the full path of php-fpm socket. This will return the output
-	// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
-	cmdGetFpmPath, err := exec.Command(
-		"cat",
-		//"/etc/php/$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp '7.\\d+')/fpm/pool.d/www.conf",
-		"/etc/php/"+phpVersion+"/fpm/pool.d/www.conf",
-		"|",
-		"grep",
-		"'listen ='",
-	).Output()
-	if err != nil {
-		return
+		// Replace document root full path into new project directory path
+		replaceContent(domainPath, "[documentRoot]", projectRoot+"/public")
+		// Replace matching server name with new the exact domain name
+		replaceContent(domainPath, "[serverName]", domain)
+		// Get the full path of php-fpm socket. This will return the output
+		// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
+		cmdGetFpmPath, err := exec.Command(
+			"cat",
+			//"/etc/php/$(php -r 'echo PHP_VERSION;' | grep --only-matching --perl-regexp '7.\\d+')/fpm/pool.d/www.conf",
+			"/etc/php/"+phpVersion+"/fpm/pool.d/www.conf",
+			"|",
+			"grep",
+			"'listen ='",
+		).Output()
+		if err != nil {
+			return
+		}
+
+		// Replace php fpm socket path
+		replaceContent(domainPath, "[phpFpmSocket]", "unix:/var/"+string(cmdGetFpmPath)[9:])
+		fmt.Println(">>>> Done creating server block")
+		// Once successfully created into sites-available, create symlink to that file
+		fmt.Println(">>>> Create symlink server block for domain: " + domain)
+		cmdLn := exec.Command("ln", "-s", domainPath, "/etc/nginx/sites-enabled/")
+		cmdLn.Run()
+
+		// Restart nginx web server once done
+		fmt.Println(">>>> Reloading web server to take effect of new changes")
+		cmdRestartWebServer := exec.Command("service", "nginx", "reload")
+		cmdRestartWebServer.Run()
+		fmt.Println(">>>> Project are available to browse with new domain: " + domain)
 	}
-
-	// Replace php fpm socket path
-	replaceContent(domainPath, "[phpFpmSocket]", "unix:/var/"+string(cmdGetFpmPath)[9:])
-	fmt.Println(">>>> Done creating server block")
-
-	// Once successfully created into sites-available, create symlink to that file
-	fmt.Println(">>>> Create symlink server block for domain: " + domain)
-	cmdLn := exec.Command("ln", "-s", domainPath, "/etc/nginx/sites-enabled/")
-	cmdLn.Run()
-
-	// Restart nginx web server once done
-	fmt.Println(">>>> Reloading web server to take effect of new changes")
-	cmdRestartWebServer := exec.Command("service", "nginx", "reload")
-	cmdRestartWebServer.Run()
-	fmt.Println(">>>> Project are available to browse with new domain: " + domain)
 }
 
 func createApacheVhost() {
@@ -169,4 +185,17 @@ func executeCommand(command string) {
 		}
 	}
 	cmd.Wait()
+}
+
+// exists returns whether the given file or directory exists
+// credit to https://stackoverflow.com/a/10510783
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
