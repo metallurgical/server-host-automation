@@ -119,7 +119,7 @@ func createNginxVhost() {
 		replaceContent(domainPath, "[serverName]", domain)
 		// Get the full path of php-fpm socket. This will return the output
 		// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
-		cmdGetFpmPath, err := exec.Command("bash", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
+		cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
 		if err != nil {
 			return
 		}
