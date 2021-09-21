@@ -125,7 +125,7 @@ func createNginxVhost() {
 		}
 
 		// Replace php fpm socket path
-		replaceContent(domainPath, "[phpFpmSocket]", "unix:/var/"+string(cmdGetFpmPath)[9:])
+		replaceContent(domainPath, "[phpFpmSocket]", "unix:/var"+string(cmdGetFpmPath)[9:])
 		fmt.Println(">>>> Done creating server block")
 		// Once successfully created into sites-available, create symlink to that file
 		fmt.Println(">>>> Create symlink server block for domain: " + domain)
