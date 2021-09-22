@@ -141,7 +141,7 @@ func createNginxVhost() {
 		}
 
 		// Replace php fpm socket path
-		replaceContent(domainPath, "[phpFpmSocket]", "unix:/var"+string(cmdGetFpmPath)[9:])
+		replaceContent(domainPath, "[phpFpmSocket]", "unix:/var"+strings.TrimSpace(string(cmdGetFpmPath)[9:]))
 		fmt.Println(">>>> Done creating server block")
 		// Once successfully created into sites-available, create symlink to that file
 		fmt.Println(">>>> Create symlink server block for domain: " + domain)
@@ -258,21 +258,19 @@ func getPhpVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(cmdPhpVersion)[4:7], nil
+	return strings.TrimSpace(string(cmdPhpVersion)[4:7]), nil
 }
 
 // getWebServerUser retrieve web server's user that running as
 // not using `ps aux` since its returning a lot of text
 func getWebServerUser() (string, error) {
-	var webServer string
-	if whichWebServer == "2" {
-		webServer = "nginx"
-	} else {
+	var webServer = "nginx"
+	if whichWebServer != "2" {
 		webServer = "httpd|apache2|apache"
 	}
 	cmdUser, err := exec.Command("bash", "-c", "ps -ef | egrep '("+webServer+")' | grep -v `whoami` | grep -v root | head -n1 | awk '{print $1}'").Output()
 	if err != nil {
 		return "", err
 	}
-	return string(cmdUser), nil
+	return strings.TrimSpace(string(cmdUser)), nil
 }
