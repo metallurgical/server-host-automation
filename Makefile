@@ -20,3 +20,7 @@ build:
 	@echo "Build for Darwin Plaform(amd64)"
 	@echo "Build main.go file"
 	env GOOS=darwin GOARCH=amd64 go build -o server-host-automation-darwin-amd64 main.go
+
+	@echo "Build for Arm"
+	@echo "Build main.go file"
+	env GOOS=linux GOARCH=arm go build -o server-host-automation-darwin-arm main.go
