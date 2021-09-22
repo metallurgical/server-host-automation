@@ -205,7 +205,7 @@ func createApacheVhost() {
 		fmt.Println(">>>> Done creating server block")
 
 		// Once successfully created into sites-available, create symlink to that file (only for Ubuntu)
-		if isHttpd != false {
+		if isHttpd == false {
 			fmt.Println(">>>> Create symlink server block for domain: " + domain)
 			cmdLn := exec.Command("ln", "-s", domainPath, "/etc/apache2/sites-enabled/")
 			cmdLn.Run()
@@ -220,7 +220,7 @@ func createApacheVhost() {
 
 		var process string;
 
-		if isHttpd != false {
+		if isHttpd == false {
 			process = "apache2"
 		} else {
 			process = "httpd"
