@@ -11,7 +11,7 @@ import (
 )
 
 const NginxSitesAvailablePath = "/etc/nginx/sites-available"
-const ApacheSitesAvailablePath = "/etc/nginx/sites-available"
+const ApacheSitesAvailablePath = "/etc/apache2/sites-available"
 
 var (
 	domain         string
