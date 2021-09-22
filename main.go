@@ -315,7 +315,7 @@ func getWebServerUser() (string, error) {
 // revertGitChanges delete cloned git folder
 func revertGitChanges() {
 	if isExist, _ := exists(projectRoot); isExist == true {
-		cmdDeleteProjectFolder := exec.Command("rf", "-rf", projectRoot)
+		cmdDeleteProjectFolder := exec.Command("rm", "-rf", projectRoot)
 		cmdDeleteProjectFolder.Run();
 	}
 }
