@@ -13,6 +13,27 @@ Run at your own risk !!! :p
 
 ### How to use
 
-Dead simple. Run any of binary release based on your platform. e.g: `$ ./server-host-automation-linux-amd64` and press enter.
+Dead simple. Run any of binary release based on your platform. e.g: 
+```
+$ ./server-host-automation-linux-amd64
+``` 
+
+and press enter.
 
 ![1](https://i.imgur.com/D8a8Ono.png)
+
+### Make executable code global
+Make it executable 
+```
+chmod u+x server-host-automation-linux-amd64
+```
+
+and copy/move to bin folder 
+```
+cp server-host-automation-linux-amd64 /usr/local/bin/shautomation
+```
+
+Once done, directly run the application using following command
+```
+$ shautomation
+```
