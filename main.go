@@ -18,7 +18,6 @@ var (
 	projectRoot    string
 	gitEndpoint    string
 	whichWebServer string
-	phpVersion     string
 )
 
 func main() {
@@ -52,8 +51,9 @@ func askForInput() {
 	fmt.Print("4) Which web server? (Apache - 1, Nginx - 2, key in 1 or 2) ? : ")
 	fmt.Scanln(&whichWebServer)
 
-	fmt.Print("5) PHP version currently use? (Put only first two major number, eg: 7.4, 8.0, 7.2, 5.6) ? : ")
-	fmt.Scanln(&phpVersion)
+	// Not really need this by now can get it directly from `php -v` command
+	// fmt.Print("5) PHP version currently use? (Put only first two major number, eg: 7.4, 8.0, 7.2, 5.6) ? : ")
+	// fmt.Scanln(&phpVersion)
 }
 
 func cloneGitRepo() {
@@ -133,7 +133,7 @@ func createNginxVhost() {
 		replaceContent(domainPath, "[serverName]", domain)
 		// Get the full path of php-fpm socket. This will return the output
 		// something similar to this eg: "listen = /run/php/php7.4-fpm.sock"
-		//cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
+		// cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+phpVersion+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
 		version, _ := getPhpVersion()
 		cmdGetFpmPath, err := exec.Command("bash", "-c", "cat /etc/php/"+version+"/fpm/pool.d/www.conf | grep 'listen ='").Output()
 		if err != nil {
