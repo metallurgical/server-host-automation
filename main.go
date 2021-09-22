@@ -23,6 +23,11 @@ var (
 
 func main() {
 	fmt.Println("[Server host automation tool by @metallurgical(https://github.com/metallurgical)]")
+	if isRoot, _ := isRoot(); isRoot == false {
+		fmt.Println("You're not running this application as root. Abort!")
+		os.Exit(1)
+	}
+
 	askForInput()
 
 	if projectRoot != "" && gitEndpoint != "" {
@@ -294,7 +299,7 @@ func getPhpVersion() (string, error) {
 }
 
 // getWebServerUser retrieve web server's user that running as
-// not using `ps aux` since its returning a lot of text
+// not using `ps aux` since its returning a lot of text.
 func getWebServerUser() (string, error) {
 	var webServer = "nginx"
 	if whichWebServer != "2" {
@@ -313,4 +318,16 @@ func revertGitChanges() {
 		cmdDeleteProjectFolder := exec.Command("rf", "-rf", projectRoot)
 		cmdDeleteProjectFolder.Run();
 	}
+}
+
+// isRoot check whether running command as root user or else.
+func isRoot() (bool, error) {
+	cmdWhoami, err := exec.Command("whoami").Output()
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(string(cmdWhoami)) == "root" {
+		return true, nil
+	}
+	return false, nil
 }

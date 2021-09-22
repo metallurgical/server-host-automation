@@ -10,3 +10,9 @@ Auto create initial server host for nginx and apache (httpd), create project roo
 
 ### Disclaimers
 Run at your own risk !!! :p
+
+### How to use
+
+Dead simple. Run any of binary release based on your platform. e.g: `$ ./server-host-automation-linux-amd64` and press enter.
+
+![1](https://i.imgur.com/D8a8Ono.png)
