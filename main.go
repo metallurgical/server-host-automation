@@ -12,6 +12,7 @@ import (
 
 const NginxSitesAvailablePath = "/etc/nginx/sites-available"
 const ApacheSitesAvailablePath = "/etc/apache2/sites-available"
+const HttpdSitesAvailablePath = "/etc/httpd/conf.d"
 
 var (
 	domain         string
@@ -51,7 +52,7 @@ func askForInput() {
 	fmt.Print("4) Which web server? (Apache - 1, Nginx - 2, key in 1 or 2) ? : ")
 	fmt.Scanln(&whichWebServer)
 
-	// Not really need this by now can get it directly from `php -v` command
+	// @keepOnHold Not really need this by now can get it directly from `php -v` command
 	// fmt.Print("5) PHP version currently use? (Put only first two major number, eg: 7.4, 8.0, 7.2, 5.6) ? : ")
 	// fmt.Scanln(&phpVersion)
 }
@@ -71,6 +72,8 @@ func cloneGitRepo() {
 	webServerUser,_ := getWebServerUser();
 	cmdChangeUser := exec.Command("chown", webServerUser + ":" + webServerUser, "-R", projectRoot+"/storage")
 	cmdChangeUser.Run()
+	cmdPermission := exec.Command("chmod", "-R", "755", projectRoot)
+	cmdPermission.Run()
 	fmt.Println(">>>> Done change ownership of storage folder")
 
 	// Copy .env.example file
@@ -109,6 +112,7 @@ func createNginxVhost() {
 	fmt.Println(">>>> Check if " + NginxSitesAvailablePath + " folder is exist..")
 	if _, err := os.Stat(NginxSitesAvailablePath); err != nil {
 		fmt.Println(">>>> Folder " + NginxSitesAvailablePath + " does not exist!. Abort")
+		revertGitChanges();
 		os.Exit(1)
 		return
 	}
@@ -160,10 +164,23 @@ func createNginxVhost() {
 // to run the desire domain for laravel project.
 func createApacheVhost() {
 	fmt.Println(">>>> Check if " + ApacheSitesAvailablePath + " folder is exist..")
-	if _, err := os.Stat(ApacheSitesAvailablePath); err != nil {
-		fmt.Println(">>>> Folder " + ApacheSitesAvailablePath + " does not exist!. Abort")
-		os.Exit(1)
-		return
+	var actualApacheSitePath string;
+	var isHttpd = false
+	// Check for apache2 root folder
+	if isExist, _ := exists(ApacheSitesAvailablePath); isExist == true {
+		actualApacheSitePath = ApacheSitesAvailablePath;
+		isHttpd = false;
+	} else {
+		// Check for httpd folder instead of apache2
+		actualApacheSitePath = HttpdSitesAvailablePath;
+		if isExist, _ := exists(actualApacheSitePath); isExist != true {
+			fmt.Println(">>>> Folder " + actualApacheSitePath + " does not exist!. Abort")
+			revertGitChanges();
+			os.Exit(1)
+			return
+		} else {
+			isHttpd = true;
+		}
 	}
 
 	fmt.Println(">>>> Create apache server block for domain: " + domain + ".")
@@ -173,7 +190,7 @@ func createApacheVhost() {
 
 	// Move the file from source into apache2 sites-available folder
 	var vhostFileName = domain + ".conf"
-	var domainPath = ApacheSitesAvailablePath + "/" + vhostFileName
+	var domainPath = actualApacheSitePath + "/" + vhostFileName
 	if isExist, _ := exists(domainPath); isExist == true {
 		fmt.Println(">>>> Server block already exist. Skip")
 	} else {
@@ -186,17 +203,32 @@ func createApacheVhost() {
 		replaceContent(domainPath, "[serverName]", domain)
 
 		fmt.Println(">>>> Done creating server block")
-		// Once successfully created into sites-available, create symlink to that file
-		fmt.Println(">>>> Create symlink server block for domain: " + domain)
-		cmdLn := exec.Command("ln", "-s", domainPath, "/etc/apache2/sites-enabled/")
-		cmdLn.Run()
-		// Enable newly created site
-		enSite := exec.Command("a2ensite", vhostFileName)
-		enSite.Run()
+
+		// Once successfully created into sites-available, create symlink to that file (only for Ubuntu)
+		if isHttpd != false {
+			fmt.Println(">>>> Create symlink server block for domain: " + domain)
+			cmdLn := exec.Command("ln", "-s", domainPath, "/etc/apache2/sites-enabled/")
+			cmdLn.Run()
+
+			// Enable newly created site
+			enSite := exec.Command("a2ensite", vhostFileName)
+			enSite.Run()
+		}
+
 		// Restart apache web server once done
 		fmt.Println(">>>> Reloading web server to take effect of new changes")
-		cmdRestartWebServer := exec.Command("service", "apache2", "restart")
+
+		var process string;
+
+		if isHttpd != false {
+			process = "apache2"
+		} else {
+			process = "httpd"
+		}
+
+		cmdRestartWebServer := exec.Command("service", process, "reload")
 		cmdRestartWebServer.Run()
+
 		fmt.Println(">>>> Project are available to browse with new domain: " + domain)
 	}
 }
@@ -273,4 +305,12 @@ func getWebServerUser() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(cmdUser)), nil
+}
+
+// revertGitChanges delete cloned git folder
+func revertGitChanges() {
+	if isExist, _ := exists(projectRoot); isExist == true {
+		cmdDeleteProjectFolder := exec.Command("rf", "-rf", projectRoot)
+		cmdDeleteProjectFolder.Run();
+	}
 }
